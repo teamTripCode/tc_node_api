@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {  RegistrationStatus, SeedNodeConfig } from './dto/seed-node.dto';
+import { RegistrationStatus, SeedNodeConfig } from './dto/seed-node.dto';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { catchError, firstValueFrom } from 'rxjs';
@@ -10,6 +10,7 @@ export class P2pService {
   private readonly logger = new Logger(P2pService.name);
   private config: SeedNodeConfig;
   private nodeAddress: string;
+  private nodeType: string = "api";
   private connected = false;
   private registrationStatus = RegistrationStatus.NOT_REGISTERED;
   private lastPingTime: Date | null = null;
@@ -39,7 +40,7 @@ export class P2pService {
   async onModuleInit() {
     this.logger.log('Initializing Seed Node service...');
     await this.connectToSeedNode();
-    
+
     // Start ping interval to maintain connection
     this.startPingInterval();
   }
@@ -52,11 +53,11 @@ export class P2pService {
 
   private startPingInterval() {
     this.stopPingInterval(); // Clear any existing interval
-    
+
     this.pingIntervalRef = setInterval(async () => {
       await this.pingSeedNode();
     }, this.config.pingInterval);
-    
+
     this.logger.log(`Ping interval started (every ${this.config.pingInterval / 1000} seconds)`);
   }
 
@@ -69,25 +70,25 @@ export class P2pService {
 
   private startReconnectInterval() {
     this.stopReconnectInterval(); // Clear any existing interval
-    
+
     this.reconnectIntervalRef = setInterval(async () => {
       if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
         this.logger.error(`Maximum reconnect attempts (${this.config.maxReconnectAttempts}) reached. Stopping reconnect attempts.`);
         this.stopReconnectInterval();
         return;
       }
-      
+
       this.reconnectAttempts++;
       this.logger.log(`Attempting to reconnect to seed node (attempt ${this.reconnectAttempts}/${this.config.maxReconnectAttempts})...`);
       await this.connectToSeedNode();
-      
+
       if (this.connected) {
         this.logger.log('Reconnected successfully!');
         this.stopReconnectInterval();
         this.reconnectAttempts = 0;
       }
     }, this.config.reconnectInterval);
-    
+
     this.logger.log(`Reconnect interval started (every ${this.config.reconnectInterval / 1000} seconds)`);
   }
 
@@ -102,7 +103,7 @@ export class P2pService {
     try {
       // First, try to ping the seed node to check if it's available
       const pingResult = await this.pingSeedNode();
-      
+
       if (!pingResult) {
         this.logger.error('Seed node is not responding to ping');
         this.handleConnectionFailure();
@@ -121,7 +122,7 @@ export class P2pService {
 
   private handleConnectionFailure() {
     this.connected = false;
-    
+
     if (!this.reconnectIntervalRef) {
       this.startReconnectInterval();
     }
@@ -130,7 +131,7 @@ export class P2pService {
   async pingSeedNode(): Promise<boolean> {
     try {
       this.logger.debug(`Pinging seed node at ${this.config.seedNodeAddress}...`);
-      
+
       const response = await firstValueFrom(
         this.httpService.get(`http://${this.config.seedNodeAddress}/ping`).pipe(
           catchError((error: AxiosError) => {
@@ -146,19 +147,19 @@ export class P2pService {
         this.logger.debug('Ping successful');
         return true;
       }
-      
+
       this.connected = false;
       this.logger.warn(`Ping returned non-200 status: ${response.status}`);
       return false;
     } catch (error) {
       this.connected = false;
       this.logger.error(`Error during ping: ${error.message}`);
-      
+
       // If we were connected and now we're not, start reconnection attempts
       if (this.connected) {
         this.handleConnectionFailure();
       }
-      
+
       return false;
     }
   }
@@ -167,11 +168,14 @@ export class P2pService {
     try {
       this.registrationStatus = RegistrationStatus.REGISTERING;
       this.logger.log(`Registering node ${this.nodeAddress} with seed node...`);
-      
+
       const response = await firstValueFrom(
         this.httpService.post(
           `http://${this.config.seedNodeAddress}/register`,
-          JSON.stringify(this.nodeAddress),
+          JSON.stringify({
+            Address: this.nodeAddress,
+            NodeType: this.nodeType
+          }),
           {
             headers: {
               'Content-Type': 'application/json',
@@ -211,7 +215,7 @@ export class P2pService {
       if (!this.connected) {
         return [];
       }
-      
+
       const response = await firstValueFrom(
         this.httpService.get(`http://${this.config.seedNodeAddress}/nodes`).pipe(
           catchError((error: AxiosError) => {
@@ -220,7 +224,7 @@ export class P2pService {
           }),
         ),
       );
-      
+
       return response.data;
     } catch (error) {
       this.logger.error(`Error getting nodes list: ${error.message}`);
@@ -233,7 +237,7 @@ export class P2pService {
       if (!this.connected) {
         return [];
       }
-      
+
       const response = await firstValueFrom(
         this.httpService.get(`http://${this.config.seedNodeAddress}/nodes/active`).pipe(
           catchError((error: AxiosError) => {
@@ -242,7 +246,7 @@ export class P2pService {
           }),
         ),
       );
-      
+
       return response.data;
     } catch (error) {
       this.logger.error(`Error getting active nodes list: ${error.message}`);
