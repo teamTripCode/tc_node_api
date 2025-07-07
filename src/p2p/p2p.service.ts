@@ -25,7 +25,7 @@ export class P2pService {
     // Load configuration
     this.config = {
       seedNodeAddress: this.configService.get<string>('SEED_NODE_ADDRESS') || 'localhost:3000',
-      nodePort: this.configService.get<number>('NODE_PORT') || 3100,
+      nodePort: this.configService.get<number>('PORT') || 3050,
       nodeHost: this.configService.get<string>('NODE_HOST') || 'localhost',
       pingInterval: this.configService.get<number>('PING_INTERVAL') || 30000, // 30 seconds
       reconnectInterval: this.configService.get<number>('RECONNECT_INTERVAL') || 10000, // 10 seconds
@@ -224,8 +224,9 @@ export class P2pService {
           }),
         ),
       );
-
+      console.log(response.data)
       return response.data;
+
     } catch (error) {
       this.logger.error(`Error getting nodes list: ${error.message}`);
       return [];
